@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Created on Thu Nov  8 19:41:53 2018
+
+Módulo principal do programa
 """
 
 __authors__ = "Antônio Neto, Isac Silva, Ivan Lima, Pedro Rodolfo"
