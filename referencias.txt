@@ -1,2 +1,3 @@
 https://stackoverflow.com/questions/1523427/what-is-the-common-header-format-of-python-files
 https://www.linkedin.com/pulse/python-sockets-criando-aplica%C3%A7%C3%B5es-cliente-e-servidor-diego
+https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html
