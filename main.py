@@ -36,4 +36,4 @@ def auto_config(tcon = 'client'):
         ValueError: se o parâmetro ``tcon`` for diferente de 'client' ou 'host'
     
     """
-    pass
+    raise NotImplemented

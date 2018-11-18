@@ -6,7 +6,7 @@ Esse módulo contém a implementação do objeto Host que controla o lado da
 conexão do servidor.
 
 Attributes:
-    pass
+    COMANDOS (dict): dicionário de comandos do usuário
 
 Todo:
     * Implementar os Consoles múltiplos no método Host.start()
@@ -16,26 +16,9 @@ Todo:
 
 import pathlib
 import socket
-import threading
+from console import Console, make_thread, printer
 
-def make_thread(func):
-    """Função que transforma uma função qualquer numa Thread
-    
-    Args:
-        func (function): função a ser transformada em Thread
-    
-    """
-    def _thread(*args, **kwargs):
-        """Decorador interno da função
-        
-        Args:
-            *args (tuple): tupla de argumentos da função
-            **kwargs (dict): dicionários de palavras-chave da função
-        
-        """
-        pcs = threading.Thread(target = func, args = args, kwargs = kwargs)
-        pcs.start()
-    return _thread
+COMANDOS = dict()
 
 class Host(object):
     """Classe do servidor que receberá os comandos e arquivos dos clientes
@@ -75,42 +58,22 @@ class Host(object):
         """Método start abre o servidor para conexões
         
         Args:
-            backlog (int): número de conexões não aceitas permitidas antes do
-                sistema recusar novas conexões.
+            backlog (int): tamanho da fila de conexões não-aceitas.
             
         """
         self.__connection.listen(backlog)
         while True:
             con, client = self.__connection.accept()
-            while True:
-                mensagem = con.recv(1024)
-                print(mensagem)
+            Host.Terminal(con, client).start()
     
     def end(self):
         """Método usado para finalizar o servidor com segurança
         """
         self.__connection.close()
-            
-    class Console(threading.Thread):
-        """Classe auxiliar Console permite conexões simultâneas
-        
-        Cada objeto Console é reposnável por tratar a conexão com um client
-        individualmente.
-        É necessário autenticação, antes que o cliente tenha acesso a qualquer
-        comando. Esta autenticação é feita através do método __login.
+    
+    class Terminal(Console):
+        """Classe Host.Terminal recebe e trata mensagens e comandos do cliente
         
         """
-        def __init__(self, conexao, cliente):
-            threading.Thread.__init__(self)
-            self.__comm = conexao #: novo socket
-            self.__client = cliente
-            self.__usr = ''
-        
-        def run (self):
-            logged = False
-            while not logged:
-                self.__login()
-        
-        def __login(self):
-            pass
-        
+        def __init__(self, sock, cliente):
+            Console.__init__(self, sock, cliente)
