@@ -12,7 +12,7 @@ Todo:
 from host import Host
 from client import Client
 
-__authors__ = "Antônio Neto, Isac Silva, Ivan Lima, Pedro Rodolfo"
+__authors__ = "Antônio Neto, Ivan Lima, Isac Silva, Pedro Rodolfo"
 __copyright__ = "Copyright 2018, Universidade Federal de Pernambuco"
 __credits__ = []
 
