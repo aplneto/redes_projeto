@@ -129,7 +129,12 @@ class Host(object):
                 psw (str): senha de acesso ao usuário
             
             Returns:
+<<<<<<< HEAD
                 bool: True se a autenticação for bem-sucedida, False se não for
+=======
+                bool: True se a autenticação for bem-sucedida e False se não
+                    for
+>>>>>>> 484e4ac42f016cb9c468bfab912315426f81b66b
             
             """
             raise NotImplemented

@@ -48,6 +48,7 @@ def printer(sock):
             break
         with threading.Lock():
             print(mensagem)
+            sock.send("recebido".encode())
 
 class Console(threading.Thread):
     """Superclasse Console
