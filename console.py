@@ -1,7 +1,7 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Console
+"""Módulo de configuração dos consoles
 
-@author: Paulino
 """
 
 import threading
@@ -29,13 +29,22 @@ def make_thread(func):
 def printer(sock):
     """Método de impressão das informações recebidas
     
-    Método que controla as informações recebidas
+    Thread de exemplo de controle de chat. Escuta o socket e imprime na tela as
+    strings recebidas através dele.
+    Fecha a conexão quando o socket do outro lado para de responder.
+    
+    Args:
+        sock (socket): socket pelo qual as mensagens são recebidas.
+    
+    WARNING: função meramente ilustrativa
     
     """
     while True:
         mensagem = sock.recv(1024)
         mensagem = mensagem.decode()
         if not mensagem:
+            sock.close()
+            print("Conexão Encerrada")
             break
         with threading.Lock():
             print(mensagem)
@@ -44,6 +53,7 @@ class Console(threading.Thread):
     """Superclasse Console
     
     Classe base para os terminais de cliente e servidor.
+    
     """
     def __init__(self, sock, cliente):
         """Método construtor do console
@@ -56,7 +66,6 @@ class Console(threading.Thread):
         threading.Thread.__init__(self)
         self.sock = sock #: novo socket
         self.client = cliente
-        self.usr = ''
     
     def run(self):
         """Método run difere entre o Console do Host e o do Client
@@ -79,6 +88,13 @@ class Console(threading.Thread):
         O Método enviar_str é o método usado apara enviar mensagens simples
         através de um socket.
         
+        Todo:
+            * Inserir a criptografia no envio de mensagens
+        
         """
         msg = msg.encode()
         self.sock.send(msg)
+    
+    def __repr__(self):
+        return "{0}({1}, {2})".format(self.__class__.__name__,
+                self.sock.__repr__(), self.client.__repr__())
