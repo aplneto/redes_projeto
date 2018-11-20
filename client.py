@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Script do client
+"""Módulo do client
+
 """
 
-from console import make_thread
+from console import Console
 import socket
-import threading
 
 class Client(object):
     """Classe do objeto Cliente
@@ -19,8 +19,9 @@ class Client(object):
         Inicia um socket em uma porta livre
         
         """
-        self.__tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__active = False
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.active = False
+        self.terminal = None
     
     def conectar(self, host = "127.0.0.1", port = 4400):
         """Método conectar
@@ -32,5 +33,31 @@ class Client(object):
             port (int): número de porta do servidor
         
         """
-        self.__tcp.connect((host, port))
-        self.__active = True
+        self.sock.connect((host, port))
+        self.active = True
+        self.terminal = Client.Terminal(self.sock, (host, port))
+        self.terminal.start()
+    
+    class Terminal(Console):
+        """Classe do terminal do cliente
+        
+        """
+        def __init__(self, sock, host):
+            Console.__init__(self, sock, host)
+            self.usr = ""
+        
+        def run(self):
+            while True:
+                mensagem = input()
+                self.enviar_str(mensagem)
+                output = self.sock.recv(1024)
+                output = output.decode()
+                print(output)
+                if mensagem == "terminate":
+                    self.sock.close()
+                    print("Conexão encerrada!")
+                    break
+        
+        def login(self):
+            pass
+            
