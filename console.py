@@ -96,6 +96,21 @@ class Console(threading.Thread):
         msg = msg.encode()
         self.sock.send(msg)
     
+    def __tratar(self, mensagem):
+        """Método de tratamento das strings recebidas
+        
+        As strings recebidas podem ser mensagens a ser impressas ou comandos
+        a serem recebidos e convertidos em métodos do objeto. Como cada objeto
+        possui seu próprio dicionário de comandos, esse método deve ser
+        implementado em cada uma das implementações dos terminais de Host e
+        Client.
+        
+        Args:
+            mensagem (str): mensagem recebida
+        
+        """
+        raise NotImplemented
+    
     def __repr__(self):
         return "{0}({1}, {2})".format(self.__class__.__name__,
                 self.sock.__repr__(), self.client.__repr__())

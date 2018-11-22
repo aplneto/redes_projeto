@@ -26,11 +26,7 @@ class DataBase:
         self.__usr = dict()
     
     def __contains__(self, usr):
-<<<<<<< HEAD
         return usr in self.__usr
     
     def __repr__(self):
         return "{}({})".format(self.__class__.__name__, self.local.__repr__())
-=======
-        return usr in self.__usr
->>>>>>> 484e4ac42f016cb9c468bfab912315426f81b66b

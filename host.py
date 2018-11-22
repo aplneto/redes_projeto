@@ -5,13 +5,11 @@
 Esse módulo contém a implementação do objeto Host que controla o lado da
 conexão do servidor.
 
-Attributes:
-    COMANDOS (dict): dicionário de comandos do usuário
-
 Todo:
     * Implementar os Consoles múltiplos no método Host.start()
     * Terminar a finalização segura de conexão no método Host.end()
     * Terminar de listar os erros e tentar contornar o erro de porta em uso
+    * Ajustar quando os terminais são deletados ao finalizar o console
     
 """
 
@@ -19,7 +17,6 @@ import socket
 from console import Console, make_thread
 from userdatabase import DataBase
 
-COMANDOS = dict()
 
 class Host(object):
     """Classe do servidor que receberá os comandos e arquivos dos clientes
@@ -80,14 +77,22 @@ class Host(object):
             except socket.timeout as timeout:
                 continue
             else:
-                self.__clients.append(Host.Terminal(con, client, self.root))
+                aux = Host.Terminal(con, client, self.root)
+                aux.start()
+                self.__clients.append(aux)
         self.connection.close()
     
     def finalizar(self):
         """Método usado para finalizar o servidor com segurança
         
         """
-        self.__run = False
+        for connection in self.__clients:
+            connection.shutdown()
+            del connection
+        try:
+            self.connection.close()
+        except OSError:
+            pass
     
     def __repr__(self):
         return "{0}({1},{2},{3})".format(self.__class__.__name__,
@@ -100,6 +105,9 @@ class Host(object):
         O terminal do servidor controla o acesso e autenticação dos usuários.
         Cada terminal é responsável pelo tratamento do acesso de um usuário
         individualmente.
+        
+        Attributes:
+            CMD_DICT (dict): dicionário relacionando comandos e funções
         
         """
         def __init__(self, sock, client, root):
@@ -116,8 +124,47 @@ class Host(object):
             self.__logged = False
         
         def run(self):
-            raise NotImplemented
+            self.__menu_inicial()
         
+        def __menu_inicial(self):
+            """Menu antes do login e signin
+            """
+            welcome = "Bem-vindo ao servidor TCPython\nFaça login ou cadastre-\
+se para ter acesso ao seu repositório."
+            self.sock.send(welcome.encode())
+            while True:
+                mensagem = self.sock.recv(1024)
+                self.__tratar(mensagem.decode())
+        
+        def __tratar(self, mensagem):
+            """Método de tratamento das mensagens recebidas do client
+            
+            As mensagens do Client são tratadas como comandos que são
+            convertidos na execução de métodos do host. O objetivo do método
+            __tratar é definir a qual método cada comando equivale.
+            
+            Args:
+                mensagem (str): mensagem recebida do client
+            
+            """
+            try:
+                mtd = Host.Terminal.CMD_DICT.__getitem__(mensagem)
+            except KeyError:
+                self.sock.send("Comando inválido".encode())
+            else:
+                mtd(self)
+        
+        def __sendhelp(self):
+            """Método que envia para o usuário uma relação dos comandos
+            
+            Envia para o usuário uma lista dos comandos disponíveis seguida
+            de uma breve descrição dos comandos.
+            """
+            
+            self.sock.send("--help".encode())
+            _help = "'sair': encerra a conexão com o servidor."
+            self.sock.send(_help.encode())
+
         def __login(self, usr, psw):
             """Método de autenticação do usuário
             
@@ -129,12 +176,8 @@ class Host(object):
                 psw (str): senha de acesso ao usuário
             
             Returns:
-<<<<<<< HEAD
-                bool: True se a autenticação for bem-sucedida, False se não for
-=======
                 bool: True se a autenticação for bem-sucedida e False se não
                     for
->>>>>>> 484e4ac42f016cb9c468bfab912315426f81b66b
             
             """
             raise NotImplemented
@@ -172,4 +215,17 @@ class Host(object):
         def shutdown(self):
             """Método de encerramento do Terminal.
             
+            Tenta se comunicar com o client, enviando uma mensagem para a
+            finalização da conecção. Em seguida fecha e deleta o socket.
             """
+            try:
+                self.sock.send("Conecção encerrada".encode())
+            except ConnectionResetError:
+                pass
+            finally:
+                self.sock.close()
+                aux = self.sock
+                self.sock = None
+                del aux
+        
+        CMD_DICT = {'help':__sendhelp, 'ajuda':__sendhelp}

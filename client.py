@@ -41,23 +41,43 @@ class Client(object):
     class Terminal(Console):
         """Classe do terminal do cliente
         
-        """
+        Attributes:
+            CMD_DICT (dict): Dicionário que associa os comandos recebidos do
+            servidor com os métodos do objeto Terminal.
+        
+        """        
         def __init__(self, sock, host):
             Console.__init__(self, sock, host)
             self.usr = ""
         
         def run(self):
+            mensagem = self.sock.recv(1024)
+            print("Digite 'help' ou 'ajuda' se precisar de ajuda.\n")
+            print(mensagem.decode())
             while True:
-                mensagem = input()
-                self.enviar_str(mensagem)
-                output = self.sock.recv(1024)
-                output = output.decode()
-                print(output)
-                if mensagem == "terminate":
-                    self.sock.close()
-                    print("Conexão encerrada!")
-                    break
+                mensagem = input("Eu: ")
+                self.sock.send(mensagem.encode())
+                mensagem = self.sock.recv(1024)
+                self.__tratar(mensagem.decode())
         
-        def login(self):
-            pass
+        def __tratar(self, mensagem):
+            """Método para tratar as mensagens recebidas do servidor
             
+            Args:
+                Mensagem (str): mensagem com comandos recebidas do servidor
+            
+            """
+            try:
+                mtd = Client.Terminal.CMD_DICT.__getitem__(mensagem)
+            except KeyError:
+                print(mensagem)
+            else:
+                mtd(self)
+        
+        def ajuda(self):
+            """Comando para o recebimento e impressão das mensagens de ajuda
+            
+            """
+            print(self.sock.recv(1024).decode())
+        
+        CMD_DICT = {'--help':ajuda}
