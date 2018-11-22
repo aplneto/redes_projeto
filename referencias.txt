@@ -1,3 +1,7 @@
 https://stackoverflow.com/questions/1523427/what-is-the-common-header-format-of-python-files
 https://www.linkedin.com/pulse/python-sockets-criando-aplica%C3%A7%C3%B5es-cliente-e-servidor-diego
 https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html
+https://sourceforge.net/projects/base91/
+http://www.iiis.org/CDs2010/CD2010SCI/CCCT_2010/PapersPdf/TB100QM.pdf
+https://github.com/aberaud/base91-python
+http://etecnologicos.blogspot.com/2017/01/criptografia-usando-python.html
