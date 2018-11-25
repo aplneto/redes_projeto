@@ -13,18 +13,18 @@ class Client(object):
     Cliente tcp do servidor de armazenamento de arquivos
     
     """
-    def __init__(self):
+    def __init__(self, host_ip = "127.0.0.1", host_port = 4400):
         """Método construtor do cliente
         
         Inicia um socket em uma porta livre
         
         """
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.active = False
+        self.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.__host = (host_ip, host_port)
         self.terminal = None
     
-    def conectar(self, host = "127.0.0.1", port = 4400):
-        """Método conectar
+    def connect(self):
+        """Método connect
         
         Abre uma conexão com o servidor de armazenamento de arquivos
         
@@ -33,10 +33,12 @@ class Client(object):
             port (int): número de porta do servidor
         
         """
-        self.sock.connect((host, port))
+        self.__sock.connect(self.__host)
         self.active = True
-        self.terminal = Client.Terminal(self.sock, (host, port))
+        self.terminal = Client.Terminal(self.__sock, self.__sock.getsockname())
         self.terminal.start()
+    
+    # Client.Terminal
     
     class Terminal(Console):
         """Classe do terminal do cliente
@@ -46,38 +48,66 @@ class Client(object):
             servidor com os métodos do objeto Terminal.
         
         """        
-        def __init__(self, sock, host):
-            Console.__init__(self, sock, host)
-            self.usr = ""
+        def __init__(self, sock, client):
+            Console.__init__(self, sock, client)
         
         def run(self):
-            mensagem = self.sock.recv(1024)
+            """Fluxo de execução do programa do cliente
+            
+            A cada comando enviado pelo cliente, este aguarda uma resposta do
+            servidor. Todas as respostas possíveis do servidor constam no
+            dicionário de comandos do Terminal.
+            
+            """
             print("Digite 'help' ou 'ajuda' se precisar de ajuda.\n")
-            print(mensagem.decode())
+            print(self.receive())
             while True:
-                mensagem = input("Eu: ")
-                self.sock.send(mensagem.encode())
-                mensagem = self.sock.recv(1024)
-                self.__tratar(mensagem.decode())
+                msg = input("\n{0}: ".format(self.usr))
+                self.send(msg)                
+                if msg == "sair":
+                    break                    
+                cmd = self.receive()
+                if cmd == "@end":
+                    break
+                else:
+                    Client.Terminal.CMD_DICT.__getitem__(cmd)(self)
+                    
+            self.sock.close()
+            print("Até mais!")
         
-        def __tratar(self, mensagem):
-            """Método para tratar as mensagens recebidas do servidor
-            
-            Args:
-                Mensagem (str): mensagem com comandos recebidas do servidor
+        def __comando_invalido(self):
+            """Imrpime na tela uma mensagem de erro simples
             
             """
-            try:
-                mtd = Client.Terminal.CMD_DICT.__getitem__(mensagem)
-            except KeyError:
-                print(mensagem)
+            print("Comando inválido")
+
+        def show_help(self):
+            """Função para imprimir na tela ajuda com o menu
+            
+            """
+            print("\n'sair': finaliza a execução do cliente")
+            print("'login': faz login numa conta existente")
+            print("'signup': cadastra uma nova conta no servidor")
+            if self.usr != "guest":
+                pass # Acrescentar a ajuda das funções depois do login
+        
+        def __login(self):
+            """Rotina de login do usuário
+            
+            """
+            usr = input("\nlogin: ")
+            self.send(usr)
+            psw = input("senha: ")
+            self.send(psw)
+            result = self.receive()
+            if result == "--1":
+                self.usr = self.receive()
             else:
-                mtd(self)
+                print("Nome de usuário ou senha incorretos! Tente novamente.")
         
-        def ajuda(self):
-            """Comando para o recebimento e impressão das mensagens de ajuda
-            
-            """
-            print(self.sock.recv(1024).decode())
-        
-        CMD_DICT = {'--help':ajuda}
+        CMD_DICT = {'login':__login, 'help': show_help,
+                    'comando_invalido': __comando_invalido}
+
+if __name__ == "__main__":
+    cliente = Client()
+    cliente.connect()

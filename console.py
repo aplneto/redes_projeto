@@ -6,7 +6,7 @@
 
 import threading
 
-def make_thread(func):
+def makethread(func):
     """Função que transforma uma função qualquer numa Thread
     
     Args:
@@ -25,48 +25,28 @@ def make_thread(func):
         pcs.start()
     return _thread
 
-@make_thread
-def printer(sock):
-    """Método de impressão das informações recebidas
-    
-    Thread de exemplo de controle de chat. Escuta o socket e imprime na tela as
-    strings recebidas através dele.
-    Fecha a conexão quando o socket do outro lado para de responder.
-    
-    Args:
-        sock (socket): socket pelo qual as mensagens são recebidas.
-    
-    WARNING: função meramente ilustrativa
-    
-    """
-    while True:
-        mensagem = sock.recv(1024)
-        mensagem = mensagem.decode()
-        if not mensagem:
-            sock.close()
-            print("Conexão Encerrada")
-            break
-        with threading.Lock():
-            print(mensagem)
-            sock.send("recebido".encode())
-
 class Console(threading.Thread):
     """Superclasse Console
     
     Classe base para os terminais de cliente e servidor.
     
+    Attributes:
+        logged (bool): True caso o usuário tenha realizado o login com sucesso,
+            False caso contrário
+    
     """
-    def __init__(self, sock, cliente):
+    def __init__(self, socket, client):
         """Método construtor do console
         
         Args:
-            conexao (socket): socket de comunicação entre cliente e servidor
+            socket (socket): socket de comunicação entre cliente e servidor
             client (tuple): tupla contendo os valores de ip e porta do cliente
         
         """
         threading.Thread.__init__(self)
-        self.sock = sock #: novo socket
-        self.client = cliente
+        self.sock = socket
+        self.client = client
+        self.usr = "guest"
     
     def run(self):
         """Método run difere entre o Console do Host e o do Client
@@ -83,19 +63,49 @@ class Console(threading.Thread):
         """
         raise NotImplemented
     
-    def enviar_str(self, msg):
-        """Método enviar_str envia mensagens simples através do socket
+    def decrypt(self, msg):
+        raise NotImplemented
+    
+    def encrypt(self, msg):
+        raise NotImplemented
+    
+    def send(self, msg):
+        """Método send envia strings simples através do socket
         
-        O Método enviar_str é o método usado apara enviar mensagens simples
-        através de um socket.
+        O Método send é o método usado apara enviar mensagens simples através
+        de um socket. Dentro desse método ocorrem as criptografias RSA e base64
+        antes do envio."
         
-        Todo:
-            * Inserir a criptografia no envio de mensagens
+        Args:
+            msg (str): mensagem a ser enviada
         
         """
-        msg = msg.encode()
-        self.sock.send(msg)
+        self.sock.send(msg.encode())
     
+    def receive(self):
+        """Método receive recebe mensagens simples através do socket
+        
+        É através desse método que o usuário recebe mensagens simples através
+        do socket. As mensagens chegam criptografadas e a descriptografia
+        acontece dentro do método receive.
+        
+        Returns:
+            (str) mensagem legível e decifrada
+        
+        """
+        msg = self.sock.recv(1024)
+        return msg.decode()
+    
+    def upload(self, file):
+        """
+        """
+        raise NotImplemented
+    
+    def download(self):
+        """
+        """
+        raise NotImplemented
+        
     def __tratar(self, mensagem):
         """Método de tratamento das strings recebidas
         
