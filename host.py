@@ -17,9 +17,12 @@ Example:
     
 """
 
+from console import Console, makethread
 import socket
 import base64
-from console import Console, makethread
+import threading
+import pathlib
+import os
 
 class Host():
     """Classe do servidor que receberá os comandos e arquivos dos clientes
@@ -39,7 +42,7 @@ class Host():
     """
     HOST = "127.0.0.1"
     PORT = 4400
-    def __init__(self, host_ip = HOST, port = PORT, root = "", **kwargs):
+    def __init__(self, host_ip = HOST, port = PORT, root = "./root", **kwargs):
         """Método construdor do Host
         
         O Host é configurado através de um ip, um valor de porta e um diretório
@@ -62,15 +65,17 @@ class Host():
         
         """
         self.host_name = (host_ip, port)
-        self.root = root
+        self.root = pathlib.Path(root)
+        if not os.path.exists(root):
+            self.root.mkdir()
         self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connection.bind(self.host_name)
         self.__run = False        
         self.__backlog = kwargs.get('backlog', 0)
         self.__timeout = kwargs.get('timeout', 0.5)
         try:
-            self.usr_dict = Host.load_users(kwargs.get('usr.config',
-                                                       'file_usr'))
+            self.usr_dict = Host.load_users(kwargs.get('file_usr',
+                                                       'usr.config'))
         except FileNotFoundError:
             self.usr_dict = dict()
     
@@ -114,14 +119,21 @@ class Host():
                 Host.Terminal(con, client, self).start()
         self.connection.close()                
     
-    def stop(self):
+    def stop(self, **kwargs):
         """Método usado para finalizar o servidor com segurança
         
         Finaliza o socket principal e inicia o processo de finalização dos
         terminais abertos.
         
+        Kwargs:
+            file_usr (str): endereço do arquivo de texto onde os usuários serão
+                salvos, 'usr.config' por padrão.
+            file_config (str): endereço onde as configurações do host serão
+                salvas, 'host.config' por padrão.
         """
         self.__run = False
+        self.export_settings(kwargs.get('file_config', 'host.config'))
+        Host.save_users(self.usr_dict, kwargs.get('file_usr', 'usr.config'))
     
     def __repr__(self):
         return "{0}({1}, {2}, {3})".format(self.__class__.__name__,
@@ -196,8 +208,7 @@ class Host():
         """
         with open(filename, 'w') as file:
             for h in dict_:
-                str_ = '@'.join(dict_[h])
-                str_ = str(h)+'@'+str_
+                str_ = h+'@'+dict_[h]
                 code = base64.a85encode(str_.encode())
                 file.write(code.decode()+'\n')
     
@@ -218,12 +229,12 @@ class Host():
             for line in file:
                 info = base64.a85decode(line.encode())
                 info = info.decode().split('@')
-                dict_usr[int(info[0])] = tuple(info[1:])
+                dict_usr[info[0]] = info[1]
         return dict_usr
     
     # Configuração da classe Host.Terminal abaixo
 
-    class Terminal(Console):
+    class Terminal(Console, threading.Thread):
         """Terminal do Servidor
         
         O terminal do servidor controla o acesso e autenticação dos usuários.
@@ -244,7 +255,9 @@ class Host():
             
             """
             Console.__init__(self, sock, client)
+            threading.Thread.__init__(self)
             self.host = host
+            self.directory = None
         
         def run(self):
             """Fluxo de execução principal do Terminal
@@ -284,20 +297,19 @@ class Host():
             self.send("login")
             
             usr = self.receive()
-            psw = int(self.receive())
+            psw = self.receive()
             
-            try:
-                profile = self.host.usr_dict[psw]
-            except KeyError:
-                self.send("--0")
+            if not usr in self.host.usr_dict:
+                self.send("0")
             else:
-                if usr in profile:
-                    self.usr = profile[0]
-                    self.send("--1")
+                if not self.host.usr_dict[usr] == psw:
+                    self.send("0")
                 else:
-                    self.send("--0")
+                    self.send("1")
+            
+            self.usr = usr
         
-        def __signin(self, usr, psw):
+        def __signin(self):
             """Método de criação de uma nova conta de usuário
             
             O método __signin é a rotina pela qual o usuário cria uma nova
@@ -319,7 +331,18 @@ class Host():
                 bool: True se o cadastro for efetuado com sucesso.
             
             """
-            raise NotImplemented
+            self.send("signin")
+            while True:
+                usr = self.receive()
+                if usr in self.host.usr_dict:
+                    self.send("1")
+                else:
+                    self.send("0")
+                    break
+            psw = self.receive()
+            self.host.usr_dict[usr] = psw
+            self.directory = self.host.root.joinpath(usr)
+            self.directory.mkdir()
         
         def __signout(self):
             """Método de finalização segura do Terminal.
@@ -340,8 +363,18 @@ class Host():
             finally:
                 self.sock.close()
         
-        CMD_DICT = {'login':__login, 'ajuda':__sendhelp, 'help':__sendhelp}
+        CMD_DICT = {'login':__login, 'ajuda':__sendhelp, 'help':__sendhelp,
+                    'signup': __signin}
 
 if __name__ == "__main__":
     servidor = Host()
     servidor.start()
+    current = threading.active_count()
+    print("Aguardando conexão!")
+    while current == threading.active_count():
+        pass
+    print("Servidor em execução")
+    while current != threading.active_count():
+        pass
+    print("Servidor finalizado")
+    servidor.stop()

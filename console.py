@@ -5,6 +5,7 @@
 """
 
 import threading
+from Crypto.PublicKey import RSA
 
 def makethread(func):
     """Função que transforma uma função qualquer numa Thread
@@ -25,7 +26,7 @@ def makethread(func):
         pcs.start()
     return _thread
 
-class Console(threading.Thread):
+class Console(object):
     """Superclasse Console
     
     Classe base para os terminais de cliente e servidor.
@@ -43,7 +44,6 @@ class Console(threading.Thread):
             client (tuple): tupla contendo os valores de ip e porta do cliente
         
         """
-        threading.Thread.__init__(self)
         self.sock = socket
         self.client = client
         self.usr = "guest"
