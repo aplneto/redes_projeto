@@ -5,23 +5,38 @@
 """
 
 from console import Console
-import socket
 
 class Client(Console):
     """Classe do objeto Cliente
     
     Cliente tcp do servidor de armazenamento de arquivos
     
+    Attributes:
+        CMD_DICT (dict): dicionário de comandos do cliente
+    
+    Methods:
+        pass
+    
+    Undocumented:
+        receive_key, receive, send
     """
-    def __init__(self, host_ip = "127.0.0.1", host_port = 4400):
+    CMD_DICT = {}
+    
+    def __init__(self, host_ip = "127.0.0.1", host_port = 4400,
+                 key_file = ".pvtkey.txt"):
         """Método construtor do cliente
         
         Inicia um socket em uma porta livre
         
+        Args:
+            host_ip (str): endereço de IP do servidor
+            host_port (int): porta do servidor
+            key_file (str): arquivo com as informações da cahve
         """
-        Console.__init__(self,
-                         socket.socket(socket.AF_INET, socket.SOCK_STREAM),
-                         (host_ip, host_port))
+        Console.__init__(self)
+        self.peer = (host_ip, host_port)
+        self.privatekey, self.publickey = Console.start_key(key_file)
+        self.usr = 'guest'
     
     def connect(self):
         """Método connect
@@ -33,8 +48,11 @@ class Client(Console):
             port (int): número de porta do servidor
         
         """
-        self.sock.connect(self.client)
+        self.sock.connect(self.peer)
         self.active = True
+        tmp = self.publickey
+        self.publickey = self.receive_key()
+        self.sock.send(tmp)
         self.run()
         
     def run(self):
@@ -45,72 +63,34 @@ class Client(Console):
         dicionário de comandos do Terminal.
         
         """
-        print("Digite 'help' ou 'ajuda' se precisar de ajuda.\n")
+        print("Conexão Estabelecida com " + str(self.peer[0]))
+        print("\nDigite 'help' ou 'ajuda' se precisar de ajuda.\n")
         print(self.receive())
         while True:
-            msg = input("\n{0}: ".format(self.usr))
-            self.send(msg)                
-            if msg == "sair":
-                break                    
-            cmd = self.receive()
-            if cmd == "@end":
+            cmd = input('\n' + self.usr + ": ")
+            self.send(cmd)
+            if cmd == 'sair':
                 break
-            else:
-                self.CMD_DICT.__getitem__(cmd)(self)
-                
+            elif cmd == 'ajuda' or cmd == 'help':
+                while True:
+                    msg = self.receive()
+                    if msg == "%end":
+                        break
+                    print(msg)
+                    self.send('')
         self.sock.close()
-        print("Até mais!")
-    
-    def __comando_invalido(self):
-        """Imrpime na tela uma mensagem de erro simples
-        
-        """
-        print("Comando inválido")
+        print("Conexão Encerrada!")
 
-    def show_help(self):
-        """Função para imprimir na tela ajuda com o menu
-        
-        """
-        print("\n'sair': finaliza a execução do cliente")
-        print("'login': faz login numa conta existente")
-        print("'signup': cadastra uma nova conta no servidor")
-        if self.usr != "guest":
-            pass # Acrescentar a ajuda das funções depois do login
+
+    def receive(self):
+        return Console.receive(self.sock, self.privatekey)
     
-    def __login(self):
-        """Rotina de login do usuário
-        
-        """
-        usr = input("\nlogin: ")
-        self.send(usr)
-        psw = input("senha: ")
-        self.send(psw)
-        result = self.receive()
-        if result == "1":
-            self.usr = usr
-        else:
-            print("Nome de usuário ou senha incorretos! Tente novamente.")
+    def receive_key(self):
+        return Console.receive_key(self.sock)
     
-    def __signin(self):
-        """Rotina de cadastro de novo usuário
-        
-        """
-        code = 1
-        while code:
-            usr = input("\nInsira o nome de usuário: ")
-            self.send(usr)
-            code = int(self.receive())
-            if code:
-                print("Nome de usuário já cadastrado.")
-        psw = input("\nDigite sua senha: ")
-        self.send(psw)
-        print("Cadastro efetuado com sucesso")
-        
-    
-    CMD_DICT = {'login':__login, 'help': show_help,
-                'comando_invalido': __comando_invalido, "signin": __signin}
+    def send(self, msg):
+        Console.send(self.sock, self.publickey, msg)
 
 if __name__ == "__main__":
     cliente = Client()
     cliente.connect()
-    cliente.run

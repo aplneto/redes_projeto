@@ -12,7 +12,6 @@ Todo:
 
 from host import Host
 from client import Client
-from console import makethread
 
 __authors__ = "Antônio Neto, Isac Silva, Ivan Lima, Pedro Rodolfo"
 __copyright__ = "Copyright 2018, Universidade Federal de Pernambuco"

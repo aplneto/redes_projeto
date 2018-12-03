@@ -18,13 +18,19 @@ Example:
 """
 
 from console import Console, makethread
-import socket
 import base64
-import threading
 import pathlib
 import os
 
-class Host():
+COMMAND_DICT = {}
+
+TERMINAL_HELP = {"conexões": "mostra quantas conexões estão ativas no momento",
+                 "finalizar": "fecha o servidor para conexões futuras"}
+
+HELP_DICT = {"sair" : "efetuar logoff e encerrar a execução do programa",
+             "login": "efetuar login", "signup": "efetuar cadastro"}
+
+class Host(Console):
     """Classe do servidor que receberá os comandos e arquivos dos clientes
     
     Servidor TCP de armazenamento de arquivos. O servidor escuta na mesma porta
@@ -57,67 +63,151 @@ class Host():
                 usuários serão salvos, sendo './root' por padrão
             
         Kwargs:
-            dbuser (str): endeço alternativo para o banco de dados de
-                usuários
+            key_file (str): endereço do arquivo contendo a chave privada do
+                servidor. Por padrão ".pvtkey.txt"
+            file_usr (str): endeço do arquivo de texto contendo os usuários já
+                cadastrados no servidor. Por padrão ".usr.txt"
+        
+        """
+        Console.__init__(self)
+        self.name = (host_ip, port)
+        self.privatekey, self.publickey = Console.start_key(kwargs.get(
+                'key_file', '.pvtkey.txt'))
+        self.sock.bind(self.name)
+        self.root = pathlib.Path(root)
+        if not os.path.exists(root):
+            self.root.mkdir()
+        
+        self.__run = False        
+        
+        try:
+            self.usr_dict = Host.load_users(kwargs.get('file_usr',
+                                                       '.usr.txt'))
+        except FileNotFoundError:
+            self.usr_dict = dict()
+        
+        self.__kwargs = kwargs
+        
+        self.client_count = 0
+
+    @makethread
+    def run(self, backlog = 0, timeout = 0.5):
+        """Método de execução principal do servidor.
+        
+        Esse método coloca o servidor no modo de escuta, aceitando conexões de
+        acordo com o backlog e timeout fornecidos como parâmetro.
+        
+        Args:
             backlog (int): tamanho da fila de conexões não-aceitas.
             timeout (float): intervaloda busca por novas conexões do socket do
                 servidor
         
         """
-        self.host_name = (host_ip, port)
-        self.root = pathlib.Path(root)
-        if not os.path.exists(root):
-            self.root.mkdir()
-        self.connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connection.bind(self.host_name)
-        self.__run = False        
-        self.__backlog = kwargs.get('backlog', 0)
-        self.__timeout = kwargs.get('timeout', 0.5)
-        try:
-            self.usr_dict = Host.load_users(kwargs.get('file_usr',
-                                                       'usr.config'))
-        except FileNotFoundError:
-            self.usr_dict = dict()
-    
-    @property
-    def running(self):
-        return self.__run
-    
-    @property
-    def backlog(self):
-        return self.__backlog
-    
-    @property
-    def timeout(self):
-        return self.__timeout
-    
-    @backlog.setter
-    def backlog(self, integer):
-        if type(integer) is not int:
-            raise ValueError ("backlog deve ser inteiro")
-        else:
-            self.__backlog = integer
-    
-    @timeout.setter
-    def timeout(self, long):
-        if type(long) is int or type(long) is float:
-            self.__timeout = float(long)
-        else:
-            raise ValueError ("timeout deve ser um número")
-
-    @makethread
-    def start(self):
-        self.connection.listen(self.backlog)
-        self.connection.settimeout(self.timeout)
+        self.sock.settimeout(timeout)
+        self.sock.listen(backlog)
         self.__run = True
         while self.__run:
             try:
-                con, client = self.connection.accept()
-            except socket.timeout:
-                continue
+                sock, client = self.sock.accept()
+            except:
+                pass
             else:
-                Host.Terminal(con, client, self).start()
-        self.connection.close()                
+                print("Conexão estabelecida com: " + ', '.join(
+                        str(x) for x in client))
+                self.client_count += 1
+                self.menu(sock)
+    
+    @makethread
+    def menu(self, sock):
+        """Menu principal de acesso de cada usuário
+        
+        Warnings:
+            Atenção as funções anônimas desse método, estas são apenas ajustes
+                nos métodos estáticos da classe Console.
+                Para mais detalhes veja a documentação dos métodos receive e
+                send na classe console.
+        """
+        sock.send(self.publickey)
+        public_key = self.receive_key(sock)
+        
+        receive = lambda: Console.receive(sock, self.privatekey)
+        send = lambda msg: Console.send(sock, public_key, msg)
+        
+        logged = False
+        send("TCPy Server beta!\nFaça login ou cadastre-se para continuar.")
+        while not logged:
+            cmd = receive()
+            if cmd == "sair":
+                break
+            elif cmd == "login":
+                send("login")
+            elif cmd == "signup":
+                send("signup")
+            elif cmd == "ajuda" or cmd == "help":
+                for comando in HELP_DICT:
+                    send(comando.__repr__() + ": " + HELP_DICT[comando])
+                    tmp = receive()
+                send('%end')
+            else:
+                send("Comando inválido!")
+            
+        sock.close()
+        self.client_count -= 1
+    
+    def login(self, receive, send):
+        """Método de Login
+        
+        Método que controla a rotina de login no servidor.
+        
+        Args:
+            receive (function): função anônima responsável pelo recebimento de
+                mensagens do cliente.
+            send (function): função anônima responsável pelo envio de mensagens
+                pelo socket do cliente.
+        
+        Returns:
+            bool: True se o login for bem sucedido e False se não for.
+        
+        """
+        raise NotImplemented
+    
+    def signup(self, receive, send):
+        """Método de Cadastro
+        
+        Método que controla a rotina de cadastro no servidor, criando uma nova
+        pasta para o usuário dentro da pasta root do servidor, assim como um
+        relatório de banco de dados "files.bd" no interior da pasta.
+        
+        Args:
+            receive (function): função anônima responsável pelo recebimento de
+                mensagens do cliente.
+            send (function): função anônima responsável pelo envio de mensagens
+                pelo socket do cliente.
+        
+        """
+        raise NotImplemented
+    
+    def start(self):
+        """Método de controle do Servidor
+        
+        Funciona como um console para o servidor, onde o usuário digita os
+        comandos e o servidor executa.
+        """
+        print("\nDigite 'help' ou 'ajuda' se precisar de ajuda.\n")
+        while True:
+            comando = input("\nadmin: ")
+            
+            if comando == "iniciar":
+                self.run()
+            elif comando == "conexões":
+                print(self.client_count)
+            elif comando == "sair":
+                print("Finalizando servidor.")
+                self.stop()
+                break
+            elif comando == "ajuda" or comando == "help":
+                for cmd in TERMINAL_HELP:
+                    print(cmd.__repr__() + ': ' + TERMINAL_HELP[cmd])
     
     def stop(self, **kwargs):
         """Método usado para finalizar o servidor com segurança
@@ -132,13 +222,14 @@ class Host():
                 salvas, 'host.config' por padrão.
         """
         self.__run = False
+        self.sock.close()
+        
         self.export_settings(kwargs.get('file_config', 'host.config'))
         Host.save_users(self.usr_dict, kwargs.get('file_usr', 'usr.config'))
-    
-    def __repr__(self):
-        return "{0}({1}, {2}, {3})".format(self.__class__.__name__,
-                self.host_name[0].__repr__(), self.host_name[1],
-                self.root.__repr__())
+        
+        key_file = open(self.__kwargs.get('key_file', '.pvtkey.txt'), 'wb')
+        key_file.write(self.privatekey.exportKey())
+        key_file.close()
     
     def export_settings(self, filename):
         """Função para exportar as configurações do servidor para um arquivo
@@ -151,17 +242,17 @@ class Host():
                 salvas
         
         """
-        host_ip = "host_ip@{}".format(self.host_name[0])
-        port = "port@{}".format(self.host_name[1])
+        host_ip = "host_ip@{}".format(self.name[0])
+        port = "port@{}".format(self.name[1])
         root = "root@{}".format(self.root)
-        backlog = "backlog@{}".format(self.__backlog)
-        timeout = "timeout@{}".format(self.__timeout)
+        
         with open(filename, 'w') as file:
             file.write(base64.a85encode(host_ip.encode()).decode()+'\n')
             file.write(base64.a85encode(port.encode()).decode()+'\n')
             file.write(base64.a85encode(root.encode()).decode()+'\n')
-            file.write(base64.a85encode(backlog.encode()).decode()+'\n')
-            file.write(base64.a85encode(timeout.encode()).decode())
+            for key in self.__kwargs:
+                line = key + '@' + str(self.__kwargs[key])
+                file.write(base64.a85encode(line.encode()).decode()+'\n')
 
     @staticmethod
     def load_host(filename):
@@ -185,12 +276,8 @@ class Host():
                 settings = line.split('@')
                 configurations[settings[0]] = settings[1]
                 code = file.readline()
-        host_ip = configurations['host_ip']
-        port = int(configurations['port'])
-        root = configurations['root']
-        backlog = int(configurations['backlog'])
-        timeout = float(configurations['timeout'])
-        return Host(host_ip, port, root, backlog = backlog, timeout = timeout)
+        configurations['port'] = int(configurations['port'])
+        return Host(**configurations)
 
     @staticmethod
     def save_users(dict_, filename):
@@ -232,149 +319,12 @@ class Host():
                 dict_usr[info[0]] = info[1]
         return dict_usr
     
-    # Configuração da classe Host.Terminal abaixo
-
-    class Terminal(Console, threading.Thread):
-        """Terminal do Servidor
-        
-        O terminal do servidor controla o acesso e autenticação dos usuários.
-        Cada terminal é responsável pelo tratamento do acesso de um usuário
-        individualmente.
-        
-        Attributes:
-            CMD_DICT (dict): dicionário relacionando comandos e funções
-        
-        """
-        def __init__(self, sock, client, host):
-            """Método Construtor
-            
-            Args:
-                sock (socket): sockete de comunicação com o cliente
-                client (tuple): par IP/Porta de conexão com o cliente
-                root (str): endereço da pasta raiz do servidor
-            
-            """
-            Console.__init__(self, sock, client)
-            threading.Thread.__init__(self)
-            self.host = host
-            self.directory = None
-        
-        def run(self):
-            """Fluxo de execução principal do Terminal
-            
-            As mensagens do Client são tratadas como comandos que são
-            convertidos na execução de métodos do host. O objetivo do método
-            __tratar é definir a qual método cada comando equivale.
-            
-            """
-            self.send("Bem-vindo ao Servidor de arquivos TCPy")
-            while True:
-                try:
-                    cmd = self.receive()
-                    if cmd == "sair":
-                        break
-                    func = Host.Terminal.CMD_DICT.__getitem__(cmd)
-                except KeyError:
-                    self.send("comando_invalido")
-                else:
-                    func(self)
-        
-        def __sendhelp(self):
-            """Método que envia para o usuário uma relação dos comandos
-            
-            Envia para o usuário uma lista dos comandos disponíveis seguida
-            de uma breve descrição dos comandos.
-            """
-            self.send('help')
-
-        def __login(self):
-            """Método de autenticação do usuário
-            
-            Método pelo o qual o usuário autentica o acesso de uma conta já
-            existente no servidor.
-                        
-            """            
-            self.send("login")
-            
-            usr = self.receive()
-            psw = self.receive()
-            
-            if not usr in self.host.usr_dict:
-                self.send("0")
-            else:
-                if not self.host.usr_dict[usr] == psw:
-                    self.send("0")
-                else:
-                    self.send("1")
-            
-            self.usr = usr
-        
-        def __signin(self):
-            """Método de criação de uma nova conta de usuário
-            
-            O método __signin é a rotina pela qual o usuário cria uma nova
-            conta de acesso ao servidor.
-            
-            Args:
-                usr (str): nome de usuário deve ser único para cada usuário.
-                    Não é possível criar uma nova conta com um nome de usuário
-                    já existente. Deve conter pelo menos três caracteres.
-                psw (str): a senha deve conter pelo menos 8 caracteres e um
-                    número inteiro.
-            
-            Raises:
-                KeyError: se o nome de usuário já existir
-                ValuError: se a senha ou nome de usuário não estiverem no
-                    formato correto:
-            
-            Returns:
-                bool: True se o cadastro for efetuado com sucesso.
-            
-            """
-            self.send("signin")
-            while True:
-                usr = self.receive()
-                if usr in self.host.usr_dict:
-                    self.send("1")
-                else:
-                    self.send("0")
-                    break
-            psw = self.receive()
-            self.host.usr_dict[usr] = psw
-            self.directory = self.host.root.joinpath(usr)
-            self.directory.mkdir()
-        
-        def __signout(self):
-            """Método de finalização segura do Terminal.
-            
-            """
-            raise NotImplemented
-        
-        def shutdown(self):
-            """Método de encerramento do Terminal.
-            
-            Tenta se comunicar com o client, enviando uma mensagem para a
-            finalização da conecção. Em seguida fecha e deleta o socket.
-            """
-            try:
-                self.send("@end")
-            except ConnectionResetError:
-                pass
-            finally:
-                self.sock.close()
-        
-        CMD_DICT = {'login':__login, 'ajuda':__sendhelp, 'help':__sendhelp,
-                    'signup': __signin}
+    def __repr__(self):
+        return ', '.join(["{0}({1}, {2}, {3})".format(self.__class__.__name__,
+                self.name[0].__repr__(), self.name[1].__repr__(),
+                self.root.name.__repr__(),  )]+[', '.join('{}: {}'.format
+                        (x, self.__kwargs[x]) for x in self.__kwargs)])
 
 if __name__ == "__main__":
     servidor = Host()
     servidor.start()
-    current = threading.active_count()
-    print("Aguardando conexão!")
-    while current == threading.active_count():
-        pass
-    print("Servidor em execução")
-    while current != threading.active_count():
-        pass
-    print("Servidor finalizado")
-    servidor.stop()
