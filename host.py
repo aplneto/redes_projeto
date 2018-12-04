@@ -23,16 +23,28 @@ import pathlib
 import os
 import threading
 
+# Dicionário que armazenará os usuários cadastrados
 USR_DICT = dict()
 
+# Dicionário de ajuda do terminal
 TERMINAL_HELP = {"conexões": "mostra quantas conexões estão ativas no momento",
-                 "finalizar": "fecha o servidor para conexões futuras"}
+                 "finalizar": "fecha o servidor para conexões futuras e "+
+                 "sai do menu",
+                 "iniciar": "abre o servidor para novas conexões"}
 
+# Dicionário de ajuda pré-login
 HELP_DICT = {"sair" : "efetuar logoff e encerrar a execução do programa",
              "login <usr> <psw>": "efetuar login usando o valor de <usr>"
              + " e <psw> como senha",
              "signup <usr> <psw>": "efetua cadastro como <usr>" +
              " usando <psw> como senha"}
+
+# Dicionário de comandos principais
+MENU_DICT = {'post <file>': 'faz o upload de um arquivo para o servidor',
+             'get <file>': 'faz o download de um arquivo do servidor',
+             'put <file>': 'faz upload da versão mais recente de um arquivo',
+             'share <file> <usr>': 'compartilha um arquivo com um usuário',
+             'show': 'lista todos os arquivos disponíveis'}
 
 CLIENT_COUNTER = 0
 CLIENT_LIST = list()
@@ -163,18 +175,23 @@ class Host(Console, threading.Thread):
         comandos e o servidor executa.
         """
         global CLIENT_COUNTER
+        running = False
         
         print("\nDigite 'help' ou 'ajuda' se precisar de ajuda.\n")
         while True:
             comando = input("\nadmin: ")
             
             if comando == "iniciar":
-                host.start()
+                if running:
+                    print("Servidor já em execução!")
+                else:
+                    host.start()
             elif comando == "conexões":
                 print(CLIENT_COUNTER)
             elif comando == "finalizar":
                 print("Finalizando servidor.")
                 host.stop()
+                running = False
                 break
             elif comando == "ajuda" or comando == "help":
                 for cmd in TERMINAL_HELP:
@@ -336,7 +353,7 @@ class ClientHandler(Console, threading.Thread):
         """
         global CLIENT_COUNTER
         
-        self.send("TCPy Server beta!\nFaça login ou cadastre-se para continuar.")
+        self.send("TCPy Server\nFaça login ou cadastre-se para continuar.")
         while True:
             msg = self.receive()
             cmd = msg.split(' ')
@@ -354,7 +371,7 @@ class ClientHandler(Console, threading.Thread):
         self.running = False
     
     def ajuda(self):
-        """ Método de ajuda do servidor.
+        """ Método de envio de ajuda do servidor.
         
         """
         if self.usr == 'guest':
@@ -365,9 +382,13 @@ class ClientHandler(Console, threading.Thread):
                     break
             self.send('0')
         else:
-            pass
+            for key in MENU_DICT:
+                msg = key.__repr__() + ': ' + MENU_DICT[key]
+                self.send(msg)
+                if self.receive() != 'ok':
+                    break
+            self.send('0')
             
-    
     def login(self, usr, psw):
         """Método de Login
         
@@ -471,7 +492,3 @@ class ClientHandler(Console, threading.Thread):
         
         """
         return "Client: "+self.usr +", running: " + str(self.running)
-
-if __name__ == "__main__":
-    servidor = Host()
-    servidor.start()

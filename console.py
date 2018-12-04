@@ -7,6 +7,7 @@
 from Crypto.PublicKey import RSA
 import socket
 import base64
+import os
 
 class Console(object):
     """Superclasse Console
@@ -98,12 +99,10 @@ class Console(object):
         Args:
             sock (socket.socket): socket pelo qual a mensagem é enviada
             publickey (_RSAobj): objeto RSA que criptografa a mensagem
-            msg (str): mensagem a ser enviada
+            msg (str ou bytes): mensagem a ser enviada
         
         """
-        msg = msg.encode()
-        msg = publickey.encrypt(msg, 3.14159265359)
-        msg = base64.a85encode(msg[0])
+        msg = Console.encrypt(msg, publickey)
         sock.sendall(msg)
     
     @staticmethod
@@ -122,21 +121,60 @@ class Console(object):
             (str) mensagem decifrada
         
         """
-        msg = sock.recv(1024)
-        msg = base64.a85decode(msg)
-        msg = privatekey.decrypt(msg)
+        msg = Console.decrypt(sock.recv(1024), privatekey)
         return msg.decode()
     
-    def upload(self, file):
+    @staticmethod
+    def encrypt(msg, publickey):
+        """Criptografia de uma string ou trecho de bytes
+        
+        Args:
+            msg (str ou bytes): string ou bytes a serem criptografados.
+        
+        Returns:
+            (bytes) segmento de bytes criptografados
+        
         """
+        if isinstance(msg, str):
+            msg = msg.encode()
+        msg = publickey.encrypt(msg, 3.14159265359)
+        msg = base64.a85encode(msg[0])
+        return msg
+    
+    def decrypt(msg, privatekey):
+        """Método de conversão de um trecho criptografado
+        
+        Args:
+            msg (bytes): trecho de mensagem a ser decifrado
+            privatekey (_RSApbj): chave privada para descriptografia
+        
+        Returns:
+            (bytes): trecho de bytes decifrados
+        """
+        msg = base64.a85decode(msg)
+        msg = privatekey.decrypt(msg)
+        return msg
+        
+
+    def send_file(self):
+        """Rotina de envio de arquivos através de sockets
+        
+        Método Abstrato. Esse método controla o envio sequencial de segmentos
+        de um arquivo através de um socket.
+        
         """
         raise NotImplemented
+            
     
-    def download(self):
+    def receive_file(self):
+        """Rotina de recebimento de arquivos através de sockets
+        
+        Método Abstrato. Esse método controla o recebeimendo de sementos de
+        arquivos através de um socket.
         """
-        """
+    
         raise NotImplemented
-    
+        
     def __repr__(self):
         return "{0}({1}, {2}, key_file = {3})".format(self.__class__.__name__,
                 self.sock.__repr__(), self.client.__repr__(),
