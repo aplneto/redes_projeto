@@ -6,27 +6,7 @@
 
 from Crypto.PublicKey import RSA
 import socket
-import threading
 import base64
-
-def makethread(func):
-    """Função que transforma uma função qualquer numa Thread
-    
-    Args:
-        func (function): função a ser transformada em Thread
-    
-    """
-    def _thread(*args, **kwargs):
-        """Decorador interno da função
-        
-        Args:
-            *args (tuple): tupla de argumentos da função
-            **kwargs (dict): dicionários de palavras-chave da função
-        
-        """
-        pcs = threading.Thread(target = func, args = args, kwargs = kwargs)
-        pcs.start()
-    return _thread
 
 class Console(object):
     """Superclasse Console

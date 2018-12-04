@@ -37,6 +37,15 @@ class Client(Console):
         self.peer = (host_ip, host_port)
         self.privatekey, self.publickey = Console.start_key(key_file)
         self.usr = 'guest'
+
+    def receive(self):
+        return Console.receive(self.sock, self.privatekey)
+    
+    def receive_key(self):
+        return Console.receive_key(self.sock)
+    
+    def send(self, msg):
+        Console.send(self.sock, self.publickey, msg)
     
     def connect(self):
         """Método connect
@@ -64,32 +73,52 @@ class Client(Console):
         
         """
         print("Conexão Estabelecida com " + str(self.peer[0]))
-        print("\nDigite 'help' ou 'ajuda' se precisar de ajuda.\n")
-        print(self.receive())
+        print("\nDigite 'ajuda' para aprender sobre os comandos disponíveis.")
+        print('\n'+self.receive())
         while True:
-            cmd = input('\n' + self.usr + ": ")
-            self.send(cmd)
-            if cmd == 'sair':
+            msg = input('\n'+self.usr+": ")
+            self.send(msg)
+            cmd = msg.split(' ')
+            if cmd[0] == 'sair':
                 break
-            elif cmd == 'ajuda' or cmd == 'help':
-                while True:
-                    msg = self.receive()
-                    if msg == "%end":
-                        break
-                    print(msg)
-                    self.send('')
+            try:
+                self.__getattribute__(cmd[0])()
+            except AttributeError:
+                print(self.receive())
         self.sock.close()
         print("Conexão Encerrada!")
-
-
-    def receive(self):
-        return Console.receive(self.sock, self.privatekey)
     
-    def receive_key(self):
-        return Console.receive_key(self.sock)
+    def login(self):
+        """Rotina de login
+        
+        """
+        msg = self.receive()
+        if msg == '1':
+            self.send('1')
+            self.usr = self.receive()
+        else:
+            print(msg)
     
-    def send(self, msg):
-        Console.send(self.sock, self.publickey, msg)
+    def signup(self):
+        """Rotina de cadastro
+        
+        """
+        msg = self.receive()
+        if msg == '1':
+            self.login()
+        else:
+            print(msg)
+    
+    def ajuda(self):
+        """Rotina de recebimento de ajuda
+        
+        """
+        msg = self.receive()
+        while msg != '0':
+            print(msg)
+            self.send('ok')
+            msg = self.receive()
+            
 
 if __name__ == "__main__":
     cliente = Client()

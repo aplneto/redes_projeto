@@ -39,3 +39,7 @@ def auto_config(tcon = 'client'):
     
     """
     raise NotImplemented
+
+if __name__ == "__main__":
+    servidor = Host()
+    Host.Menu(servidor)
