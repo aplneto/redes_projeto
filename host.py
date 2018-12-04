@@ -45,6 +45,8 @@ def makethread(func):
     Args:
         func (function): função a ser transformada em Thread
     
+    Returns:
+        (function) wrapper da função a ser transformada em thread
     """
     def _thread(*args, **kwargs):
         """Decorador interno da função
@@ -234,7 +236,7 @@ class Host(Console, threading.Thread):
             filename (str): endereço do arquivo de configurações
         
         Returns:
-            Host: objeto do tipo Host com as configurações salvas no arquivo.
+            (Host) objeto do tipo Host com as configurações salvas no arquivo.
         
         """
         configurations = dict()
@@ -277,7 +279,7 @@ class Host(Console, threading.Thread):
             fileusers (str): endereço do arquivo de usuários
         
         Returns:
-            dict: dicionário contendo como chaves hash de senhas e valores os
+            (dict) dicionário contendo como chaves hash de senhas e valores os
                 nomes de usuário
         """
         dict_usr = dict()
@@ -432,8 +434,8 @@ class ClientHandler(Console, threading.Thread):
             bdfilename (str): nome do arquivo .bd do usuário
             
         Returns:
-            (dict) dicionário no formato
-            dict[(nome do arquivo)] = (proprietário, última modificação)
+            (dict) dicionário no formato:
+                dict[(nome do arquivo)] = (proprietário, última modificação)
             
         """
         bd_dict = dict()

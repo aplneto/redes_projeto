@@ -52,6 +52,10 @@ class Console(object):
         
         Args:
             key_file (str): endereço do arquivo da chave privada
+        
+        Returns:
+            (tuple) uma tupla contendo um par _RSAobj (chave privada) e byte 
+            (inicializador da chave pública)
         """
         try:
             keyfile = open(key_file, 'rb')
@@ -76,7 +80,7 @@ class Console(object):
             sock (socket.socket): socket pelo qual a chave é recebida
         
         Returns:
-            _RSAobj: chave pública para criptografia.
+            (_RSAobj) chave pública para criptografia.
         
         """
         k = sock.recv(1024)
