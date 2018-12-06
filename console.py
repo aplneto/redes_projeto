@@ -6,8 +6,9 @@
 
 from Crypto.PublicKey import RSA
 import socket
-import base64
 import os
+import base64
+
 
 class Console(object):
     """Superclasse Console
@@ -22,17 +23,17 @@ class Console(object):
     def __init__(self, **kwargs):
         """Método construtor do console
         
-        Args:
-            ip (str): endereço ip
-            port (int): porta
-        
         Kwargs:
             sock (socket): socket de comunicação
+            key_file (str): arquivo para inicialização de par de chaves
         
         """
         self.sock = kwargs.get('sock',
                                socket.socket(socket.AF_INET,
                                              socket.SOCK_STREAM))
+        key_file = kwargs.get('key_file', '')
+        if key_file:
+            self.privatekey, self.publickey = Console.start_key(key_file)
     
     def run(self):
         """Método run difere entre o Console do Host e o do Client
@@ -69,27 +70,22 @@ class Console(object):
             public_key = private_key.publickey().exportKey()
             return private_key, public_key
     
-    @staticmethod
-    def receive_key(sock):
+    def receive_key(self):
         """Troca de chaves no início da comunicação
         
         Ao se conectarem, servidor e cliente trocam suas chaves públicas um com
         o outro. Esse método retorna um objeto do tipo RSA público a partir da
         chave pública recebida através de um socket.
         
-        Args:
-            sock (socket.socket): socket pelo qual a chave é recebida
-        
         Returns:
             (_RSAobj) chave pública para criptografia.
         
         """
-        k = sock.recv(1024)
+        k = self.sock.recv(1024)
         key = RSA.importKey(k)
         return key
     
-    @staticmethod
-    def send(sock, publickey, msg):
+    def send(self, msg):
         """Método send envia strings simples através do socket
         
         O Método send é o método usado apara enviar mensagens simples através
@@ -97,16 +93,13 @@ class Console(object):
         antes do envio."
         
         Args:
-            sock (socket.socket): socket pelo qual a mensagem é enviada
-            publickey (_RSAobj): objeto RSA que criptografa a mensagem
             msg (str ou bytes): mensagem a ser enviada
         
         """
-        msg = Console.encrypt(msg, publickey)
-        sock.sendall(msg)
+        msg = self.encrypt(msg)
+        self.sock.send(msg)
     
-    @staticmethod
-    def receive(sock, privatekey):
+    def receive(self, b = 160):
         """Método receive recebe mensagens simples através do socket
         
         É através desse método que o usuário recebe mensagens simples através
@@ -114,18 +107,16 @@ class Console(object):
         acontece dentro do método receive.
         
         Args:
-            sock (socket.socket): socket pelo qual a mensagem é recebida
-            privatekey (_RSAobj): objeto RSA que decifra a mensagem
+            b (int): quantidade de bytes a serem recebidos
         
         Returns:
             (str) mensagem decifrada
         
         """
-        msg = Console.decrypt(sock.recv(1024), privatekey)
+        msg = self.decrypt(self.sock.recv(b))
         return msg.decode()
     
-    @staticmethod
-    def encrypt(msg, publickey):
+    def encrypt(self, msg):
         """Criptografia de uma string ou trecho de bytes
         
         Args:
@@ -137,44 +128,88 @@ class Console(object):
         """
         if isinstance(msg, str):
             msg = msg.encode()
-        msg = publickey.encrypt(msg, 3.14159265359)
+        msg = self.publickey.encrypt(msg, 3.14159265359)
         msg = base64.a85encode(msg[0])
         return msg
     
-    def decrypt(msg, privatekey):
+    def decrypt(self, msg):
         """Método de conversão de um trecho criptografado
         
         Args:
             msg (bytes): trecho de mensagem a ser decifrado
-            privatekey (_RSApbj): chave privada para descriptografia
         
         Returns:
             (bytes): trecho de bytes decifrados
         """
         msg = base64.a85decode(msg)
-        msg = privatekey.decrypt(msg)
+        msg = self.privatekey.decrypt(msg)
         return msg
         
 
-    def send_file(self):
+    def send_file(self, filename):
         """Rotina de envio de arquivos através de sockets
         
-        Método Abstrato. Esse método controla o envio sequencial de segmentos
-        de um arquivo através de um socket.
+        Esse método controla o envio sequencial de segmentos de um arquivo
+        através de um socket, gerando a cada envio um número inteiro referente
+        a quantidade de bytes enviados até o momento.
+        Método deve ser usado como um gerador. Veja exemplo abaixo.
+        
+        Example:
+            
+            for b in self.sendfile('alice.txt'):
+                if b == -1:
+                    print("Houve um erro na transferência")
+                else:
+                    print(str(b) + "de " str(file_size) "bytes enviados")
+        
+        Args:
+            filename (str): endereço do arquivo
+            
+        Yields:
+            (int) quantidade de bytes enviados ou -1, em caso de erro
         
         """
-        raise NotImplemented
+        size = os.path.getsize(filename)
+        self.send(str(size))
+        sent = 0
+        file = open(filename, 'rb')
+        while sent < size:
+            nxt = file.read(1024)
+            self.sock.send(self.encrypt(nxt))
+            sent += len(nxt)
+            yield sent
+        file.close()
+            
             
     
-    def receive_file(self):
+    def receive_file(self, filename):
         """Rotina de recebimento de arquivos através de sockets
         
-        Método Abstrato. Esse método controla o recebeimendo de sementos de
-        arquivos através de um socket.
-        """
-    
-        raise NotImplemented
+        Esse método controla o recebeimendo de sementos de arquivos através de
+        um socket. O método gera a quantidade de bytes recebidos a cada nova
+        mensagem recebida do socket, por tanto, deve ser usado como um gerador.
         
+        Example:
+            
+            for b in receive_file(filename):
+                print(str(b) + " de " str(filesize) " bytes recebidos.")
+        
+        Args:
+            filename(str): nome do arquivo
+        
+        Yields:
+            (int) quantidade de bytes recebidos
+        """
+        size = int(self.receive())
+        file = open(filename, 'wb')
+        rcvd = 0
+        while rcvd < size:
+            nxt = self.decrypt(self.sock.recv(160))
+            rcvd += len(nxt)
+            file.write(nxt)
+            yield rcvd
+        file.close()
+            
     def __repr__(self):
         return "{0}({1}, {2}, key_file = {3})".format(self.__class__.__name__,
                 self.sock.__repr__(), self.client.__repr__(),

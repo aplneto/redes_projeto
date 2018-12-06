@@ -22,6 +22,8 @@ import base64
 import pathlib
 import os
 import threading
+import ntpath
+import datetime
 
 # Dicionário que armazenará os usuários cadastrados
 USR_DICT = dict()
@@ -82,15 +84,11 @@ class Host(Console, threading.Thread):
     
     Attributes:
         HOST (str): valor padrão do servidor host para conexões locais
+            'localhost'
         PORT (int): valor de porta padrão para o servidor 4400
-    
-    Methods: run, stop
-    
-    Undocumented:
-        backlog, backlog_setter, timeout, timeout_setter, running, start
         
     """
-    HOST = "127.0.0.1"
+    HOST = "localhost"
     PORT = 4400
     def __init__(self, host_ip = HOST, port = PORT, root = "./root", **kwargs):
         """Método construdor do Host
@@ -113,12 +111,11 @@ class Host(Console, threading.Thread):
                 cadastrados no servidor. Por padrão ".usr.txt"
         
         """
-        Console.__init__(self)
+        Console.__init__(self, key_file = kwargs.get('key_file',
+                                                     '.pvtkey.txt'))
         threading.Thread.__init__(self)
         self.host_name = (host_ip, port)
         self.sock.bind(self.host_name)
-        self.privatekey, self.publickey = Console.start_key(kwargs.get(
-                'key_file', '.pvtkey.txt'))
         
         self.root = pathlib.Path(root)
         if not os.path.exists(root):
@@ -162,7 +159,7 @@ class Host(Console, threading.Thread):
                 print("Conexão estabelecida com: " + ', '.join(
                         str(x) for x in client))
                 CLIENT_COUNTER += 1
-                tmp = ClientHandler(sock, self.publickey, self.privatekey,
+                tmp = ClientHandler(sock, client, self.publickey, self.privatekey,
                                     self.root)
                 tmp.start()
                 CLIENT_LIST.append(tmp)
@@ -193,6 +190,9 @@ class Host(Console, threading.Thread):
                 host.stop()
                 running = False
                 break
+            elif comando == "clientes":
+                for h in CLIENT_LIST:
+                    print(h.usr)
             elif comando == "ajuda" or comando == "help":
                 for cmd in TERMINAL_HELP:
                     print(cmd.__repr__() + ': ' + TERMINAL_HELP[cmd])
@@ -317,7 +317,7 @@ class Host(Console, threading.Thread):
 # Classe auxiliar do Servidor
 
 class ClientHandler(Console, threading.Thread):
-    def __init__(self, socket, publickey, privatekey, root):
+    def __init__(self, socket, client, publickey, privatekey, root):
         """Método construtor do ajudante
         
         Esse método realiza a troca de chaves com o cliente.
@@ -330,6 +330,7 @@ class ClientHandler(Console, threading.Thread):
         """
         Console.__init__(self, sock = socket)
         threading.Thread.__init__(self)
+        self.client = client
         self.privatekey = privatekey
         self.sock.send(publickey)
         self.publickey = self.receive_key()
@@ -337,15 +338,6 @@ class ClientHandler(Console, threading.Thread):
         self.usr_bd = dict()
         self.running = True
         self.usr = 'guest'
-
-    def receive(self):
-        return Console.receive(self.sock, self.privatekey)
-    
-    def receive_key(self):
-        return Console.receive_key(self.sock)
-    
-    def send(self, msg):
-        Console.send(self.sock, self.publickey, msg)
 
     def run(self):
         """Processo principal da Thread do Handler
@@ -361,9 +353,10 @@ class ClientHandler(Console, threading.Thread):
                 break
             try:
                 self.__getattribute__(cmd[0])(*cmd[1:])
+                del cmd
             except TypeError:
-                self.send("Parâmetros incorretos!\nUse o comando 'help'" +
-                          "ou 'ajuda' para mais informações!")
+                self.send("Parâmetros incorretos!\nUse o comando 'ajuda'" +
+                          " para mais informações!")
             except AttributeError:
                 self.send("Comando inválido!")
         self.sock.close()
@@ -378,15 +371,13 @@ class ClientHandler(Console, threading.Thread):
             for key in HELP_DICT:
                 msg = key.__repr__() + ': ' + HELP_DICT[key]
                 self.send(msg)
-                if self.receive() != 'ok':
-                    break
+                ack = self.receive()
             self.send('0')
         else:
             for key in MENU_DICT:
                 msg = key.__repr__() + ': ' + MENU_DICT[key]
                 self.send(msg)
-                if self.receive() != 'ok':
-                    break
+                ack = self.receive()
             self.send('0')
             
     def login(self, usr, psw):
@@ -402,20 +393,33 @@ class ClientHandler(Console, threading.Thread):
         if self.usr == 'guest':
             if usr in USR_DICT:
                 if USR_DICT[usr] == psw:
+                    self.usr = usr
                     self.send('1')
-                    if self.receive() == '1':
-                        self.send(usr)
                     self.directory = self.root.joinpath(usr)
                     self.usr_bd.update(
                             self.recover_bdfile(
                                     str(self.directory.joinpath(usr+'.bd'))))
-                    self.usr = usr
+                    print(self.usr + 'efetuou login de' + str(self.client))
                 else:
                     self.send("Senha incorreta!")
             else:
                 self.send("Nome de usuário desconhecido!")
         else:
             self.send("Comando inválido!")
+    
+    def logout(self):
+        """Método de Logout
+        
+        Warnings:
+            Incompleto
+        """
+        usr = self.usr
+        self.usr = 'guest'
+        del self.directory
+        self.directory = self.root
+        del self.usr_bd
+        self.usr_bd = dict()
+        self.send("Até mais " + usr + ".")
     
     def signup(self, usr, psw):
         """Método de Cadastro
@@ -436,14 +440,37 @@ class ClientHandler(Console, threading.Thread):
                 self.send("1")
                 USR_DICT[usr] = psw
                 _dir = self.directory.joinpath(usr)
-                _dir.mkdir()
-                bd = open(str(_dir.joinpath(usr+'.bd')), 'w')
-                bd.close()
+                try:
+                    _dir.mkdir()
+                except FileExistsError:
+                    pass
+                finally:
+                    bd = open(str(_dir.joinpath(usr+'.bd')), 'w')
+                    bd.close()
+                ack = self.receive()
                 self.login(usr, psw)
         else:
             self.send("Comando inválido!")
     
-    @staticmethod
+    def post(self, file_address):
+        """Método que controla o upload de um arquivo
+        
+        Esse método controla o upload de um arquivo para o diretório do usuário
+        sem se preocupar com qual a versão do arquivo.
+        
+        Args:
+            file_address (str): endereço do arquivo na máquina do cliente
+            
+        """
+        self.send("ack")
+        filename = ntpath.basename(file_address)
+        count = 0
+        for b in self.receive_file(str(self.directory.joinpath(filename))):
+            count += b
+            print(count)
+        print(str(count) + ' bytes recebidos de '+ str(self.client))
+        self.usr_bd[filename] = (self.usr, str(datetime.datetime.now()))
+            
     def recover_bdfile(bdfilename):
         """Método para recuperar o dicionário de arquivos de um usuário
         
@@ -492,3 +519,7 @@ class ClientHandler(Console, threading.Thread):
         
         """
         return "Client: "+self.usr +", running: " + str(self.running)
+
+if __name__ == "__main__":
+    servidor = Host()
+    servidor.start()

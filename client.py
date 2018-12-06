@@ -5,6 +5,8 @@
 """
 
 from console import Console
+import os
+import sys
 
 class Client(Console):
     """Classe do objeto Cliente
@@ -22,7 +24,7 @@ class Client(Console):
     """
     CMD_DICT = {}
     
-    def __init__(self, host_ip = "127.0.0.1", host_port = 4400,
+    def __init__(self, host_ip = "localhost", host_port = 4400,
                  key_file = ".pvtkey.txt"):
         """Método construtor do cliente
         
@@ -33,19 +35,9 @@ class Client(Console):
             host_port (int): porta do servidor
             key_file (str): arquivo com as informações da cahve
         """
-        Console.__init__(self)
+        Console.__init__(self, key_file = key_file)
         self.peer = (host_ip, host_port)
-        self.privatekey, self.publickey = Console.start_key(key_file)
         self.usr = 'guest'
-
-    def receive(self):
-        return Console.receive(self.sock, self.privatekey)
-    
-    def receive_key(self):
-        return Console.receive_key(self.sock)
-    
-    def send(self, msg):
-        Console.send(self.sock, self.publickey, msg)
     
     def connect(self):
         """Método connect
@@ -57,12 +49,16 @@ class Client(Console):
             port (int): número de porta do servidor
         
         """
-        self.sock.connect(self.peer)
-        self.active = True
-        tmp = self.publickey
-        self.publickey = self.receive_key()
-        self.sock.send(tmp)
-        self.run()
+        try:
+            self.sock.connect(self.peer)
+        except ConnectionRefusedError:
+            print("Erro!\nServidor indisponível.")
+        else:
+            self.active = True
+            tmp = self.publickey
+            self.publickey = self.receive_key()
+            self.sock.send(tmp)
+            self.run()
         
     def run(self):
         """Fluxo de execução do programa do cliente
@@ -82,30 +78,44 @@ class Client(Console):
             if cmd[0] == 'sair':
                 break
             try:
-                self.__getattribute__(cmd[0])()
+                self.__getattribute__(cmd[0])(*cmd[1:])
             except AttributeError:
+                print(self.receive())
+            except TypeError:
                 print(self.receive())
         self.sock.close()
         print("Conexão Encerrada!")
     
-    def login(self):
+    def login(self, usr, psw):
         """Rotina de login
         
         """
         msg = self.receive()
         if msg == '1':
-            self.send('1')
-            self.usr = self.receive()
+            self.usr = usr
+            print("Seja bem-vindo, " + usr + ".")
         else:
             print(msg)
     
-    def signup(self):
+    def logout(self):
+        """Método de logout
+        
+        Warnings:
+            Incompleto
+        
+        """
+        print(self.receive())
+        self.usr = 'guest'
+    
+    def signup(self, usr, psw):
         """Rotina de cadastro
         
         """
         msg = self.receive()
         if msg == '1':
-            self.login()
+            print(usr + " cadastrado com sucesso.")
+            self.send('ack')
+            self.login(usr, psw)
         else:
             print(msg)
     
@@ -118,7 +128,18 @@ class Client(Console):
             print(msg)
             self.send('ok')
             msg = self.receive()
-            
+    
+    def post(self, file_address):
+        """Método de post de arquivos diretamente no diretório do cliente
+        
+        Envia um arquivo através do método 
+        """
+        ack = self.receive()
+        size = os.path.getsize(file_address)
+        print("Enviando "+str(size)+" bytes")
+        for b in self.send_file(file_address):
+            sys.stdout.write('\r'+str(b)+" bytes enviados")
+        
 
 if __name__ == "__main__":
     cliente = Client()
