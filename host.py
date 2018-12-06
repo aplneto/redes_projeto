@@ -354,9 +354,9 @@ class ClientHandler(Console, threading.Thread):
             try:
                 self.__getattribute__(cmd[0])(*cmd[1:])
                 del cmd
-            except TypeError:
-                self.send("Parâmetros incorretos!\nUse o comando 'ajuda'" +
-                          " para mais informações!")
+            #except TypeError:
+             #   self.send("Parâmetros incorretos!\nUse o comando 'ajuda'" +
+              #            " para mais informações!")
             except AttributeError:
                 self.send("Comando inválido!")
         self.sock.close()
@@ -464,13 +464,12 @@ class ClientHandler(Console, threading.Thread):
         """
         self.send("ack")
         filename = ntpath.basename(file_address)
-        count = 0
         for b in self.receive_file(str(self.directory.joinpath(filename))):
-            count += b
-            print(count)
-        print(str(count) + ' bytes recebidos de '+ str(self.client))
+            pass
+        print(str(b) + ' bytes recebidos de '+ str(self.client))
         self.usr_bd[filename] = (self.usr, str(datetime.datetime.now()))
             
+    @staticmethod
     def recover_bdfile(bdfilename):
         """Método para recuperar o dicionário de arquivos de um usuário
         

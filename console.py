@@ -114,7 +114,7 @@ class Console(object):
         
         """
         msg = self.decrypt(self.sock.recv(b))
-        return msg.decode()
+        return msg.decode('utf-8')
     
     def encrypt(self, msg):
         """Criptografia de uma string ou trecho de bytes
@@ -127,7 +127,7 @@ class Console(object):
         
         """
         if isinstance(msg, str):
-            msg = msg.encode()
+            msg = msg.encode('utf-8')
         msg = self.publickey.encrypt(msg, 3.14159265359)
         msg = base64.a85encode(msg[0])
         return msg
@@ -174,8 +174,9 @@ class Console(object):
         sent = 0
         file = open(filename, 'rb')
         while sent < size:
+            ack = self.receive()
             nxt = file.read(1024)
-            self.sock.send(self.encrypt(nxt))
+            self.sock.send(nxt)
             sent += len(nxt)
             yield sent
         file.close()
@@ -204,7 +205,8 @@ class Console(object):
         file = open(filename, 'wb')
         rcvd = 0
         while rcvd < size:
-            nxt = self.decrypt(self.sock.recv(160))
+            self.send('ack')
+            nxt = self.sock.recv(1024)
             rcvd += len(nxt)
             file.write(nxt)
             yield rcvd
