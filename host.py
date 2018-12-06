@@ -6,10 +6,7 @@ Esse módulo contém a implementação do objeto Host que controla o lado da
 conexão do servidor.
 
 Todo:
-    * Implementar os Consoles múltiplos no método Host.start()
-    * Terminar a finalização segura de conexão no método Host.end()
-    * Terminar de listar os erros e tentar contornar o erro de porta em uso
-    * Ajustar quando os terminais são deletados ao finalizar o console
+    Concluir a documentação
 
 Example:
     >> servidor = Host()
@@ -44,12 +41,12 @@ HELP_DICT = {"sair" : "efetuar logoff e encerrar a execução do programa",
 # Dicionário de comandos principais
 MENU_DICT = {'post <file>': 'faz o upload de um arquivo para o servidor',
              'get <file>': 'faz o download de um arquivo do servidor',
-             'put <file>': 'faz upload da versão mais recente de um arquivo',
              'share <file> <usr>': 'compartilha um arquivo com um usuário',
-             'show': 'lista todos os arquivos disponíveis'}
+             'show': 'lista todos os arquivos disponíveis',
+             'delete <file>':'exlui um arquivo do banco de dados do usuário'}
 
 CLIENT_COUNTER = 0
-CLIENT_LIST = list()
+CLIENT_DICT = dict()
 
 # Funções Auxlilares
 
@@ -162,7 +159,6 @@ class Host(Console, threading.Thread):
                 tmp = ClientHandler(sock, client, self.publickey, self.privatekey,
                                     self.root)
                 tmp.start()
-                CLIENT_LIST.append(tmp)
     
     @staticmethod
     def Menu(host):
@@ -191,7 +187,7 @@ class Host(Console, threading.Thread):
                 running = False
                 break
             elif comando == "clientes":
-                for h in CLIENT_LIST:
+                for h in CLIENT_DICT:
                     print(h.usr)
             elif comando == "ajuda" or comando == "help":
                 for cmd in TERMINAL_HELP:
@@ -353,18 +349,46 @@ class ClientHandler(Console, threading.Thread):
                 break
             try:
                 self.__getattribute__(cmd[0])(*cmd[1:])
-                del cmd
+            except KeyError as k:
+                raise k
             #except TypeError:
              #   self.send("Parâmetros incorretos!\nUse o comando 'ajuda'" +
               #            " para mais informações!")
-            except AttributeError:
-                self.send("Comando inválido!")
+            #except AttributeError:
+             #   self.send("Comando inválido!")
         self.sock.close()
         CLIENT_COUNTER -= 1
+        if self.usr != 'guest':
+            del CLIENT_DICT[self.usr]
         self.running = False
+        print("Conexão com", self.client, "encerrada")
+        self.generate_bdfile(str(self.directory.joinpath(self.usr+'.bd')),
+                             self.usr_bd)
     
+    def share (self, filename, usr):
+        """Método de compartilhamento de arquivos com outros usuários
+        
+        Args:
+            filename (str): nome do arquivo
+            usr (str): nome do usuário
+            
+        """
+        if not filename in self.usr_bd:
+            self.send("Arquivo inexistente")
+        elif not usr in USR_DICT:
+            self.send("Usuário não encontrado")
+        else:
+            if usr in CLIENT_DICT:
+                CLIENT_DICT[usr].usr_bd[filename] = self.usr_bd[filename]
+            else:
+                file = self.root.joinpath(usr).joinpath(usr+'.bd').open('a')
+                text_line = filename+' '+' '.join(self.usr_bd[filename])+'\n'
+                file.write(text_line)
+                file.close()
+            self.send(filename+" compartilhado com "+usr)
+
     def ajuda(self):
-        """ Método de envio de ajuda do servidor.
+        """Método de envio de ajuda do servidor.
         
         """
         if self.usr == 'guest':
@@ -379,6 +403,18 @@ class ClientHandler(Console, threading.Thread):
                 self.send(msg)
                 ack = self.receive()
             self.send('0')
+    
+    def show(self):
+        """Método de exibição dos arquivos disponíveis
+        
+        """
+        info = "{0}\nProprietário: {1}, Última atualização: {2}\n"
+        for file in self.usr_bd:
+            print(file, self.usr_bd[file])
+            self.send(info.format(file, self.usr_bd[file][0],
+                                  self.usr_bd[file][1]))
+            ack = self.receive()
+        self.send('EOF')
             
     def login(self, usr, psw):
         """Método de Login
@@ -390,6 +426,8 @@ class ClientHandler(Console, threading.Thread):
             psw (str): senha do usuário
         
         """
+        if usr in CLIENT_DICT:
+            self.send("Sessão em andamento!")
         if self.usr == 'guest':
             if usr in USR_DICT:
                 if USR_DICT[usr] == psw:
@@ -399,27 +437,14 @@ class ClientHandler(Console, threading.Thread):
                     self.usr_bd.update(
                             self.recover_bdfile(
                                     str(self.directory.joinpath(usr+'.bd'))))
-                    print(self.usr + 'efetuou login de' + str(self.client))
+                    print(self.usr + ' efetuou login de ' + str(self.client))
+                    CLIENT_DICT[self.usr] = self
                 else:
                     self.send("Senha incorreta!")
             else:
                 self.send("Nome de usuário desconhecido!")
         else:
             self.send("Comando inválido!")
-    
-    def logout(self):
-        """Método de Logout
-        
-        Warnings:
-            Incompleto
-        """
-        usr = self.usr
-        self.usr = 'guest'
-        del self.directory
-        self.directory = self.root
-        del self.usr_bd
-        self.usr_bd = dict()
-        self.send("Até mais " + usr + ".")
     
     def signup(self, usr, psw):
         """Método de Cadastro
@@ -468,6 +493,42 @@ class ClientHandler(Console, threading.Thread):
             pass
         print(str(b) + ' bytes recebidos de '+ str(self.client))
         self.usr_bd[filename] = (self.usr, str(datetime.datetime.now()))
+    
+    def get(self, file):
+        """Método usado para baixar o arquivo do servidor
+        
+        Args:
+            file (str): nome do arquivo no banco de dados do usuário
+        
+        """
+        filename = str(self.root.joinpath(self.usr_bd[file][0]).joinpath(file))
+        for b in self.send_file(filename):
+            pass
+        print(str(b) + ' bytes enviados para '+ str(self.client))
+    
+    def delete(self, file):
+        """
+        
+        Args:
+            file (str): nome do arquivo a ser excluido
+        """
+        if file in self.usr_bd:
+            del self.usr_bd[file]
+            filepath = self.directory.joinpath(file)
+            os.remove(str(filepath))
+            self.send(file +" excluído")
+        else:
+            self.send("Arquivo não encontrado")
+    
+    @staticmethod
+    def update_bdfile(bdfilename, file):
+        _bd = ClientHandler.recover_bdfile(bdfilename)
+        try:
+            del _bd[file]
+        except KeyError:
+            pass
+        ClientHandler.generate_bdfile(bdfilename, _bd)
+        
             
     @staticmethod
     def recover_bdfile(bdfilename):
@@ -486,9 +547,8 @@ class ClientHandler(Console, threading.Thread):
             
         """
         bd_dict = dict()
-        file = open(bdfilename, 'rb')
+        file = open(bdfilename, 'r')
         for line in file:
-            line = base64.a85decode(line).decode()
             info = line.split(' ')
             bd_dict[info[0]] = tuple(info[1:])
         file.close()
@@ -498,18 +558,15 @@ class ClientHandler(Console, threading.Thread):
     def generate_bdfile(bdfilename, bd_dict):
         """Método que cria um arquivo .bd a partir de um dicionário de arquivos
         
-        O arquivo é protegido com criptografia de base64.
-        
         Args:
             bdfilename (str): nome do arquivo .bd para o qual o dicionário será
                 salvo.
             bd_dict (dict): dicionário a ser salvo.
         
         """
-        file = open(bdfilename, 'wb')
+        file = open(bdfilename, 'w')
         for key in bd_dict:
             text_line = key + ' ' + ' '.join(bd_dict[key]) + '\n'
-            text_line = base64.a85encode(text_line.encode())
             file.write(text_line)
         file.close()
     

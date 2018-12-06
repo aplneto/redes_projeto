@@ -7,6 +7,7 @@
 from console import Console
 import os
 import sys
+import pathlib
 
 class Client(Console):
     """Classe do objeto Cliente
@@ -79,6 +80,7 @@ class Client(Console):
                 break
             try:
                 self.__getattribute__(cmd[0])(*cmd[1:])
+                del cmd
             except AttributeError:
                 print(self.receive())
             except TypeError:
@@ -86,6 +88,16 @@ class Client(Console):
         self.sock.close()
         print("Conexão Encerrada!")
     
+    def show(self):
+        msg = self.receive()
+        while msg != "EOF":
+            print(msg)
+            self.send('ack')
+            msg = self.receive()
+    
+    def share(self, usr):
+        print(self.receive())
+        
     def login(self, usr, psw):
         """Rotina de login
         
@@ -96,16 +108,6 @@ class Client(Console):
             print("Seja bem-vindo, " + usr + ".")
         else:
             print(msg)
-    
-    def logout(self):
-        """Método de logout
-        
-        Warnings:
-            Incompleto
-        
-        """
-        print(self.receive())
-        self.usr = 'guest'
     
     def signup(self, usr, psw):
         """Rotina de cadastro
@@ -139,8 +141,20 @@ class Client(Console):
         print("Enviando "+str(size)+" bytes")
         for b in self.send_file(file_address):
             sys.stdout.write('\r'+str(b)+" bytes enviados")
+    
+    def get(self, filename):
+        """Método de get de arquivos do servidor
         
+        """
+        p = pathlib.Path(os.path.expanduser("~"))
+        p = p.joinpath("Downloads").joinpath(filename)
+        for b in self.receive_file(str(p)):
+            sys.stdout.write('\r'+str(b)+" bytes recebidos")
+        print(filename+' salvo em '+p)
 
+    def delete(self, file):
+        print(self.receive())
+        
 if __name__ == "__main__":
     cliente = Client()
     cliente.connect()
