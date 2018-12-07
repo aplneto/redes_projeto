@@ -351,11 +351,11 @@ class ClientHandler(Console, threading.Thread):
                 self.__getattribute__(cmd[0])(*cmd[1:])
             except KeyError as k:
                 raise k
-            #except TypeError:
-             #   self.send("Parâmetros incorretos!\nUse o comando 'ajuda'" +
-              #            " para mais informações!")
-            #except AttributeError:
-             #   self.send("Comando inválido!")
+            except TypeError:
+                self.send("Parâmetros incorretos!\nUse o comando 'ajuda'" +
+                          " para mais informações!")
+            except AttributeError:
+                self.send("Comando inválido!")
         self.sock.close()
         CLIENT_COUNTER -= 1
         if self.usr != 'guest':
@@ -565,9 +565,10 @@ class ClientHandler(Console, threading.Thread):
         
         """
         file = open(bdfilename, 'w')
+        text_line = '{0} {1}'
         for key in bd_dict:
-            text_line = key + ' ' + ' '.join(bd_dict[key]) + '\n'
-            file.write(text_line)
+            value = ' '.join(bd_dict[key])
+            file.write(text_line.format(key, value))
         file.close()
     
     def __repr__(self):
