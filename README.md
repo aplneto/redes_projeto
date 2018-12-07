@@ -1,4 +1,4 @@
 # redes_projeto
 PROJETO DE REDES
 
-Responsáveis: Antônio Neto, Isac Silva, Ivan Lima, Pedro Rodolfo
+Responsáveis: Antônio Neto, Gabriel Longuinhos, Isac Silva, Ivan Lima, Pedro Rodolfo
